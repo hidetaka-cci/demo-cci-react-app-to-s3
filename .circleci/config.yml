@@ -53,3 +53,7 @@ workflows:
           context: aws-oidc
           requires:
             - build-react-app
+          filters:
+            branches:
+              only:
+                - main
