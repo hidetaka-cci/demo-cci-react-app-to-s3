@@ -1,0 +1,118 @@
+# This is a template CircleCI deploy config
+# that shows how to use deploy markers to track deployments.
+# You can edit this template to add your custom deployment logic.
+
+version: 2.1
+orbs:
+  aws-s3: circleci/aws-s3@4.1.3
+  aws-cli: circleci/aws-cli@5.1.1
+
+jobs:
+  deploy-component:
+    executor:
+      name: aws-s3/default
+      resource_class: small
+    environment:
+      COMPONENT_NAME: << pipeline.deploy.component_name >>
+      NAMESPACE: << pipeline.deploy.namespace >>
+      ENVIRONMENT_NAME: << pipeline.deploy.environment_name >>
+      TARGET_VERSION: << pipeline.deploy.target_version >>
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+
+      # This step will create a new deploy with PENDING status
+      # that will show up in the deploys tab in the UI
+      - run:
+          name: Plan release of deploy release
+          command: |
+            circleci run release plan  \
+              --environment-name=${ENVIRONMENT_NAME} \
+              --namespace=${NAMESPACE} \
+              --component-name=${COMPONENT_NAME} \
+              --target-version=${TARGET_VERSION}
+
+      - aws-cli/setup:
+          role_arn: ${AWS_ROLE_ARN}
+          region: ${AWS_REGION}
+      
+      # TARGET_VERSIONからSHAを抽出（形式: 1.0.BUILD_NUM-FULL_SHA）
+      - run:
+          name: Extract SHA from TARGET_VERSION
+          command: |
+            # TARGET_VERSIONから最後の部分（フルSHA）を抽出
+            FULL_SHA=$(echo ${TARGET_VERSION} | cut -d'-' -f2-)
+            echo "Extracted SHA: ${FULL_SHA}"
+            echo "export ARTIFACT_FILE=app-${FULL_SHA}.tar.gz" >> $BASH_ENV
+            echo "Artifact file: app-${FULL_SHA}.tar.gz"
+      
+      # S3からartifactのtarファイルをダウンロード
+      - run:
+          name: Download artifact from S3
+          command: |
+            source $BASH_ENV
+            echo "Downloading artifact: ${ARTIFACT_FILE}"
+            aws s3 cp \
+              s3://${AWS_S3_BUCKET}/artifacts/${ARTIFACT_FILE} \
+              ./${ARTIFACT_FILE}
+      
+      # tarを解凍
+      - run:
+          name: Extract tarball
+          command: |
+            source $BASH_ENV
+            mkdir -p ./dist
+            echo "Extracting: ${ARTIFACT_FILE}"
+            tar -xzf ./${ARTIFACT_FILE} -C ./dist
+      
+      # 解凍した内容をS3にsync
+      - run:
+          name: Sync to S3 app directory
+          command: |
+            aws s3 sync ./dist s3://${AWS_S3_BUCKET}/app \
+              --delete \
+              --acl private
+      
+      - run:
+          name: Update deployment status to running
+          command: circleci run release update "${CIRCLE_JOB}" --status=RUNNING
+
+      # These last two steps update the PENDING deployment marker
+      # to SUCCESS or FAILED, based on the outcome of the job.
+      - run:
+          name: Update planned release to SUCCESS
+          command: |
+            circleci run release update "${CIRCLE_JOB}" \
+              --status=SUCCESS
+          when: on_success
+      - run:
+          name: Update planned release to FAILED
+          command: |
+            circleci run release update "${CIRCLE_JOB}" \
+             --status=FAILED \
+          when: on_fail
+
+  # This job handles the cancellation of the deploy marker
+  # if the deploy job is canceled
+  cancel-deploy:
+    docker:
+      - image: cimg/base:current
+    steps:
+      - run:
+          name: Update planned release to CANCELED
+          command: |
+            circleci run release update \
+             --status=CANCELED
+
+workflows:
+  deploy:
+    jobs:
+      - deploy-component
+      - cancel-deploy:
+          requires:
+            - deploy-component:
+              - canceled
+          filters:
+            branches:
+              only: main
