@@ -30,7 +30,7 @@ jobs:
             circleci run release plan deploy-component \
               --environment-name=${ENVIRONMENT_NAME} \
               --namespace=${NAMESPACE} \
-              --component-name=${COMPONENT_NAME} \
+              --component-name="${COMPONENT_NAME}-artifact" \
               --target-version=${TARGET_VERSION}
 
       - aws-cli/setup:
