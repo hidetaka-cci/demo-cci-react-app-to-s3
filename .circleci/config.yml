@@ -16,10 +16,19 @@ jobs:
       - run:
           command: npm run build
           name: Build React app
+      
+      # tar.gz に圧縮
+      - run:
+          name: Create tarball
+          command: |
+            cd dist
+            tar -czf ../app-${CIRCLE_SHA1}.tar.gz .
+            cd ..
       - persist_to_workspace:
           root: .
           paths:
-            - dist
+            - app-*.tar.gz
+
   deploy-artifact:
     executor:
       name: aws-s3/default
@@ -30,11 +39,10 @@ jobs:
       - aws-cli/setup:
           role_arn: ${AWS_ROLE_ARN}
           region: ${AWS_REGION}
-      - aws-s3/sync:
-          from: dist
-          to: 's3://${AWS_S3_BUCKET}'
-          arguments: |
-            --delete
+      - aws-s3/copy:
+          from: app-${CIRCLE_SHA1}.tar.gz
+          to: 's3://${AWS_S3_BUCKET}/artifacts/app-${CIRCLE_SHA1}.tar.gz'
+          arguments: '--acl private'
 
 
 workflows:
