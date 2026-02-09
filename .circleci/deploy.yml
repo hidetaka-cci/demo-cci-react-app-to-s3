@@ -96,6 +96,7 @@ jobs:
   # This job handles the cancellation of the deploy marker
   # if the deploy job is canceled
   cancel-deploy:
+    resource_class: small
     docker:
       - image: cimg/base:current
     steps:
@@ -108,11 +109,9 @@ jobs:
 workflows:
   deploy:
     jobs:
-      - deploy-component
+      - deploy-component:
+          context: aws-oidc
       - cancel-deploy:
           requires:
             - deploy-component:
               - canceled
-          filters:
-            branches:
-              only: main
