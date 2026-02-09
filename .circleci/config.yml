@@ -1,0 +1,11 @@
+version: 2.1
+orbs:
+  node: circleci/node@7.2.1
+workflows:
+  build-react-app:
+    jobs:
+      - node/run:
+          executor:
+            name: node/default
+            resource_class: small
+          npm-run: build
