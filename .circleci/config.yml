@@ -8,22 +8,37 @@ jobs:
   build-react-app:
     executor:
       name: node/default
-      resource_class: small
+      resource_class: medium
     steps:
       - checkout
+      - restore_cache:
+          keys:
+            - v1-npm-deps-{{ checksum "package-lock.json" }}
+            - v1-npm-deps-
       - node/install-packages:
           pkg-manager: npm
+          cache-path: ~/.npm
+          override-ci-command: npm ci --prefer-offline
+      - save_cache:
+          key: v1-npm-deps-{{ checksum "package-lock.json" }}
+          paths:
+            - ~/.npm
+      - restore_cache:
+          keys:
+            - v1-build-cache-{{ .Branch }}-{{ .Revision }}
+            - v1-build-cache-{{ .Branch }}-
+            - v1-build-cache-
       - run:
           command: npm run build
           name: Build React app
-      
-      # tar.gz に圧縮
+      - save_cache:
+          key: v1-build-cache-{{ .Branch }}-{{ .Revision }}
+          paths:
+            - dist
+            - node_modules/.vite
       - run:
           name: Create tarball
-          command: |
-            cd dist
-            tar -czf ../app-${CIRCLE_SHA1}.tar.gz .
-            cd ..
+          command: tar -czf app-${CIRCLE_SHA1}.tar.gz -C dist .
       - persist_to_workspace:
           root: .
           paths:
@@ -36,6 +51,9 @@ jobs:
     steps:
       - attach_workspace:
           at: .
+      - aws-cli/setup:
+          role_arn: ${AWS_ROLE_ARN}
+          region: ${AWS_REGION}
       - run:
           name: Plan deployment
           command: |
@@ -43,13 +61,10 @@ jobs:
               --environment-name="default" \
               --component-name="${CIRCLE_PROJECT_REPONAME}" \
               --target-version="1.0.${CIRCLE_BUILD_NUM}-${CIRCLE_SHA1}"
-      - aws-cli/setup:
-          role_arn: ${AWS_ROLE_ARN}
-          region: ${AWS_REGION}
       - aws-s3/copy:
           from: app-${CIRCLE_SHA1}.tar.gz
           to: 's3://${AWS_S3_BUCKET}/artifacts/app-${CIRCLE_SHA1}.tar.gz'
-          arguments: '--acl private'
+          arguments: '--acl private --storage-class INTELLIGENT_TIERING'
       - run:
           name: Update deployment status to running
           command: circleci run release update "${CIRCLE_JOB}" --status=RUNNING
