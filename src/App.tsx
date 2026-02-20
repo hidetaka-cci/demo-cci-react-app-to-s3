@@ -3,6 +3,22 @@ import reactLogo from './assets/react.svg'
 import viteLogo from '/vite.svg'
 import './App.css'
 
+/**
+ * Main application component that demonstrates Vite + React integration
+ * with Hot Module Replacement (HMR) capabilities.
+ *
+ * This component showcases:
+ * - React Hooks (useState) for state management
+ * - Interactive counter functionality
+ * - Vite and React logo links to official documentation
+ * - HMR demonstration with live reload instructions
+ *
+ * @returns {JSX.Element} The rendered application interface
+ *
+ * @example
+ * // Used as the root component in main.tsx
+ * <App />
+ */
 function App() {
   const [count, setCount] = useState(0)
 
