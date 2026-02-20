@@ -5,6 +5,26 @@ orbs:
   aws-cli: circleci/aws-cli@5.1.1
 
 jobs:
+  test:
+    executor:
+      name: node/default
+      resource_class: small
+    steps:
+      - checkout
+      - node/install-packages:
+          pkg-manager: npm
+      - run:
+          command: npm run test:run
+          name: Run tests
+      - run:
+          command: npm run test:coverage
+          name: Generate coverage report
+      - store_test_results:
+          path: ./coverage
+      - store_artifacts:
+          path: ./coverage
+          destination: coverage
+
   build-react-app:
     executor:
       name: node/default
@@ -66,7 +86,10 @@ jobs:
 workflows:
   build-react-app:
     jobs:
-      - build-react-app
+      - test
+      - build-react-app:
+          requires:
+            - test
       - deploy-artifact:
           context: aws-oidc
           requires:
