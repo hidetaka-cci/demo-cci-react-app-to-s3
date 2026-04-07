@@ -1,11 +1,12 @@
 version: 2.1
 
 jobs:
-  generate-sbom:
+  sbom-and-scan:
     docker:
-      - image: aquasec/trivy:0.69.3  # latestは使用しない
+      - image: aquasec/trivy:0.69.3
     steps:
       - checkout
+
       - run:
           name: Generate SBOM (CycloneDX)
           command: |
@@ -13,6 +14,15 @@ jobs:
               --format cyclonedx \
               --output sbom.cdx.json \
               --quiet
+
+      - run:
+          name: Scan SBOM for vulnerabilities
+          command: |
+            trivy sbom sbom.cdx.json \
+              --severity HIGH,CRITICAL \
+              --quiet \
+              --exit-code 1
+
       - store_artifacts:
           path: sbom.cdx.json
           destination: sbom/cyclonedx.json
@@ -20,4 +30,4 @@ jobs:
 workflows:
   sbom-pipeline:
     jobs:
-      - generate-sbom
+      - sbom-and-scan
