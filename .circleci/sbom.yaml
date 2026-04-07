@@ -3,7 +3,9 @@ version: 2.1
 jobs:
   sbom-and-scan:
     docker:
-      - image: aquasec/trivy:0.69.3
+      # Pin by digest so a retagged image cannot replace this ref (tags are mutable on registries).
+      # Equivalent tag: 0.69.3 — refresh: docker buildx imagetools inspect aquasec/trivy:0.69.3
+      - image: aquasec/trivy@sha256:bcc376de8d77cfe086a917230e818dc9f8528e3c852f7b1aff648949b6258d1c
     steps:
       - checkout
 
