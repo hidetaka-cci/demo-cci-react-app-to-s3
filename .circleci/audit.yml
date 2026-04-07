@@ -16,10 +16,44 @@ jobs:
           command: npm ci --ignore-scripts
       - run:
           name: Run npm audit
-          command: npm audit --audit-level=high
+          command: |
+            set +e
+            npm audit --audit-level=high --json > audit-report.json 2> audit-stderr.txt
+            code=$?
+            set -e
+            exit "$code"
+      - run:
+          name: Summarize npm audit for Slack
+          when: on_fail
+          command: |
+            if [ -f audit-report.json ]; then
+              SUMMARY="$(node .circleci/format-npm-audit-for-slack.cjs audit-report.json)" || SUMMARY="audit-report.json の要約に失敗しました。"
+            else
+              SUMMARY="audit-report.json が見つかりません。"
+            fi
+            printf 'export AUDIT_SLACK_SUMMARY=%q\n' "$SUMMARY" >> "$BASH_ENV"
       - slack/notify:
           event: fail
-          template: basic_fail_1
+          custom: |
+            {
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "npm audit 失敗",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*リポジトリ:* $CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME\n*ブランチ:* $CIRCLE_BRANCH\n*ビルド:* <$CIRCLE_BUILD_URL|CircleCI で開く>\n\n*npm audit 要約*\n$AUDIT_SLACK_SUMMARY"
+                  }
+                }
+              ]
+            }
           #channel: your-security-channel-id  # Slack チャンネル ID に置き換え
 
 workflows:
