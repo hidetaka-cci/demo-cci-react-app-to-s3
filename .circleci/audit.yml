@@ -1,0 +1,31 @@
+# .circleci/audit.yml
+version: 2.1
+
+orbs:
+  slack: circleci/slack@5.1.1
+
+jobs:
+  audit:
+    docker:
+      - image: cimg/node:22.0
+    resource_class: small
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: npm ci --ignore-scripts
+      - run:
+          name: Run npm audit
+          command: npm audit --audit-level=high
+      - slack/notify:
+          event: fail
+          template: basic_fail_1
+          channel: your-security-channel-id  # Slack チャンネル ID に置き換え
+
+workflows:
+  nightly-audit:
+    jobs:
+      - audit:
+          context:
+            - private-slack
+            #- slack-notifications  # Slack Webhook URL を格納した Context
