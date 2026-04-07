@@ -20,7 +20,7 @@ jobs:
       - slack/notify:
           event: fail
           template: basic_fail_1
-          channel: your-security-channel-id  # Slack チャンネル ID に置き換え
+          #channel: your-security-channel-id  # Slack チャンネル ID に置き換え
 
 workflows:
   nightly-audit:
