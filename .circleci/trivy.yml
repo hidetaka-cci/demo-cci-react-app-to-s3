@@ -14,9 +14,6 @@ executors:
 
 
 jobs:
-  # コーディネーター
-  preparation-gate:
-    type: no-op
 
   # ── 1. シークレットリーク検出（最速 fail）──
   secret-scan:
@@ -104,24 +101,16 @@ workflows:
     jobs:
       # シークレット検出と依存インストールを並列実行
       - secret-scan
+      - sbom-and-vuln-scan
       - install-deps
 
-      # 両方成功したらスキャンフェーズへ（no-op: クレジット消費なし）
-      - preparation-gate:
-          requires:
-            - secret-scan
-            - install-deps
-
-      # 2つのスキャンを並列実行 — 全パスしないとビルドに進めない
-      - sbom-and-vuln-scan:
-          requires:
-            - preparation-gate
       - license-check:
           requires:
-            - preparation-gate
+            - install-deps
 
       # 全スキャン通過後にビルド
       - build:
           requires:
+            - secret-scan
             - sbom-and-vuln-scan
             - license-check
