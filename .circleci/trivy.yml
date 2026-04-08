@@ -1,0 +1,149 @@
+version: 2.1
+
+executors:
+  trivy:
+    docker:
+      # Pin by digest — equivalent tag: 0.69.3
+      - image: aquasec/trivy@sha256:bcc376de8d77cfe086a917230e818dc9f8528e3c852f7b1aff648949b6258d1c
+  semgrep:
+    docker:
+      - image: returntocorp/semgrep@sha256:aef2a53a7f69d53c4d73912fa1c3d4d10fc1279bb622e342749e60379f5982cb
+  node:
+    docker:
+      - image: cimg/node:22.16
+
+
+jobs:
+  # ── 1. Fast fail: シークレットリーク検出 ──
+  secret-scan:
+    executor: trivy
+    resource_class: small
+    steps:
+      - checkout
+      - run:
+          name: Scan for leaked secrets
+          command: |
+            trivy fs . \
+              --scanners secret \
+              --exit-code 1 \
+              --quiet
+
+  # ── 2. 依存インストール ──
+  install-deps:
+    executor: node
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - deps-v1-{{ checksum "package-lock.json" }}
+      - run: npm ci
+      - save_cache:
+          key: deps-v1-{{ checksum "package-lock.json" }}
+          paths:
+            - node_modules
+      - persist_to_workspace:
+          root: .
+          paths:
+            - .
+
+  # ── 3a. SBOM生成 + SCA（脆弱性スキャン） ──
+  sbom-and-vuln-scan:
+    executor: trivy
+    steps:
+      - attach_workspace:
+          at: /workspace
+      - run:
+          name: Generate SBOM (CycloneDX)
+          command: |
+            trivy fs /workspace \
+              --format cyclonedx \
+              --output /workspace/sbom.cdx.json \
+              --quiet
+      - run:
+          name: Scan SBOM for vulnerabilities
+          command: |
+            trivy sbom /workspace/sbom.cdx.json \
+              --severity HIGH,CRITICAL \
+              --exit-code 1 \
+              --quiet
+      - store_artifacts:
+          path: /workspace/sbom.cdx.json
+          destination: sbom/cyclonedx.json
+
+  # ── 3b. ライセンスコンプライアンス ──
+  license-check:
+    executor: trivy
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: /workspace
+      - run:
+          name: License compliance check
+          command: |
+            trivy fs /workspace \
+              --scanners license \
+              --severity HIGH,CRITICAL \
+              --exit-code 1 \
+              --quiet
+
+  # ── 3d. SAST（ソースコード静的解析） ──
+  sast:
+    executor: semgrep
+    resource_class: medium
+    steps:
+      - attach_workspace:
+          at: /workspace
+      - run:
+          name: SAST scan (Semgrep)
+          working_directory: /workspace
+          command: |
+            semgrep scan \
+              --config auto \
+              --error \
+              --json \
+              --output sast-results.json \
+              .
+      - store_artifacts:
+          path: /workspace/sast-results.json
+          destination: sast/results.json
+
+  # ── 4. ビルド ──
+  build:
+    executor: node
+    steps:
+      - attach_workspace:
+          at: .
+      - run: npm run build
+      - persist_to_workspace:
+          root: .
+          paths:
+            - dist
+
+
+workflows:
+  build-scan-deploy:
+    jobs:
+      # シークレット検出は最速で回す（checkout のみで判定可能）
+      - secret-scan
+
+      - install-deps:
+          requires:
+            - secret-scan
+
+      # 4つのスキャンを並列実行 — 全パスしないとビルドに進めない
+      - sbom-and-vuln-scan:
+          requires:
+            - install-deps
+      - license-check:
+          requires:
+            - install-deps
+      - sast:
+          requires:
+            - install-deps
+
+      # 全スキャン通過後にビルド
+      - build:
+          requires:
+            - sbom-and-vuln-scan
+            - license-check
+            - sast
