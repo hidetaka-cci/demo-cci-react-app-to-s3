@@ -92,22 +92,10 @@ jobs:
   sast:
     executor: semgrep
     resource_class: medium
-    working_directory: /root/project
+    working_directory: /home/semgrep/project
     steps:
-      #- checkout
-      - run:
-          name: Debug environment
-          command: |
-            whoami
-            id
-            tar --version
-            ls -la /root/ || echo "/root not accessible"
-            mkdir -p /root/project && echo "mkdir OK" || echo "mkdir FAILED"
-      - run:
-          name: Install GNU tar (fix BusyBox tar issue)
-          command: apk add --no-cache tar gzip
       - attach_workspace:
-          at: /root/project
+          at: /home/semgrep/project
       - run:
           name: SAST scan (Semgrep)
           command: |
@@ -115,10 +103,10 @@ jobs:
               --config auto \
               --error \
               --json \
-              --output /root/project/sast-results.json \
-              /root/project
+              --output /home/semgrep/project/sast-results.json \
+              /home/semgrep/project
       - store_artifacts:
-          path: /root/project/sast-results.json
+          path: /home/semgrep/project/sast-results.json
           destination: sast/results.json
 
   # ── 4. ビルド ──
