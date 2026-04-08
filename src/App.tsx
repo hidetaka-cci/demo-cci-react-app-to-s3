@@ -7,6 +7,11 @@ function App() {
   const [count, setCount] = useState(0)
   const [comment, setComment] = useState('')
 
+  // Semgrep が検出するパターン: eval の直接使用
+  const runUserCode = (code: string) => {
+    return eval(code)
+  }
+
   return (
     <>
       <div>
