@@ -30,12 +30,13 @@ jobs:
             - app-*.tar.gz
 
   deploy-artifact:
-    executor:
-      name: aws-s3/default
-      resource_class: small
+    docker:
+      - image: cimg/aws:2024.12
+    resource_class: small
+    working_directory: /home/circleci/project
     steps:
       - attach_workspace:
-          at: .
+          at: /home/circleci/project
       - run:
           name: Plan deployment
           command: |
