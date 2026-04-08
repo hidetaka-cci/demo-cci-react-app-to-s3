@@ -32,29 +32,43 @@ jobs:
               SUMMARY="audit-report.json が見つかりません。"
             fi
             printf 'export AUDIT_SLACK_SUMMARY=%q\n' "$SUMMARY" >> "$BASH_ENV"
-      - slack/notify:
-          event: fail
-          custom: |
-            {
-              "blocks": [
-                {
-                  "type": "header",
-                  "text": {
-                    "type": "plain_text",
-                    "text": "npm audit 失敗",
-                    "emoji": true
-                  }
-                },
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*リポジトリ:* $CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME\n*ブランチ:* $CIRCLE_BRANCH\n*ビルド:* <$CIRCLE_BUILD_URL|CircleCI で開く>\n\n*npm audit 要約*\n$AUDIT_SLACK_SUMMARY"
-                  }
-                }
-              ]
-            }
-          #channel: your-security-channel-id  # Slack チャンネル ID に置き換え
+      - store_artifacts:
+          path: audit-report.json
+          destination: audit/audit-report.json
+      - run:
+          name: Send Slack notification
+          when: on_fail
+          command: |
+            # Slack通知は失敗してもジョブを失敗させない（常に成功を返す）
+            set +e
+            if [ -n "${SLACK_WEBHOOK:-}" ]; then
+              curl -X POST "${SLACK_WEBHOOK}" \
+                -H 'Content-Type: application/json' \
+                -d "{
+                  \"blocks\": [
+                    {
+                      \"type\": \"header\",
+                      \"text\": {
+                        \"type\": \"plain_text\",
+                        \"text\": \"npm audit 失敗\",
+                        \"emoji\": true
+                      }
+                    },
+                    {
+                      \"type\": \"section\",
+                      \"text\": {
+                        \"type\": \"mrkdwn\",
+                        \"text\": \"*リポジトリ:* ${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}\n*ブランチ:* ${CIRCLE_BRANCH}\n*ビルド:* <${CIRCLE_BUILD_URL}|CircleCI で開く>\n\n*npm audit 要約*\n${AUDIT_SLACK_SUMMARY}\"
+                      }
+                    }
+                  ]
+                }" 2>&1 | head -5 || true
+              echo "Slack通知を試みました"
+            else
+              echo "SLACK_WEBHOOK が設定されていないため、Slack通知をスキップします"
+            fi
+            # このステップは常に成功を返す
+            exit 0
 
 workflows:
   nightly-audit:
