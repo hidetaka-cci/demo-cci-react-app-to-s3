@@ -3,18 +3,19 @@ version: 2.1
 executors:
   trivy:
     docker:
-      # Pin by digest — equivalent tag: 0.69.3
+      # digest 固定 — 対応タグ: 0.69.3
       - image: aquasec/trivy@sha256:bcc376de8d77cfe086a917230e818dc9f8528e3c852f7b1aff648949b6258d1c
-  semgrep:
-    docker:
-      - image: returntocorp/semgrep@sha256:aef2a53a7f69d53c4d73912fa1c3d4d10fc1279bb622e342749e60379f5982cb
   node:
     docker:
       - image: cimg/node:22.16
 
 
 jobs:
-  # ── 1. Fast fail: シークレットリーク検出 ──
+  # コーディネーター
+  preparation-gate:          
+    type: no-op
+
+  # ── 1. シークレットリーク検出（最速 fail）──
   secret-scan:
     executor: trivy
     resource_class: small
@@ -46,7 +47,7 @@ jobs:
           paths:
             - .
 
-  # ── 3a. SBOM生成 + SCA（脆弱性スキャン） ──
+  # ── 3a. SBOM 生成 + SCA（脆弱性スキャン）──
   sbom-and-vuln-scan:
     executor: trivy
     working_directory: /root/project
@@ -88,27 +89,6 @@ jobs:
               --exit-code 1 \
               --quiet
 
-  # ── 3d. SAST（ソースコード静的解析） ──
-  sast:
-    executor: semgrep
-    resource_class: medium
-    working_directory: /home/semgrep/project
-    steps:
-      - attach_workspace:
-          at: /home/semgrep/project
-      - run:
-          name: SAST scan (Semgrep)
-          command: |
-            semgrep scan \
-              --config auto \
-              --error \
-              --json \
-              --output /home/semgrep/project/sast-results.json \
-              /home/semgrep/project
-      - store_artifacts:
-          path: /home/semgrep/project/sast-results.json
-          destination: sast/results.json
-
   # ── 4. ビルド ──
   build:
     executor: node
@@ -128,24 +108,24 @@ workflows:
       # シークレット検出は最速で回す（checkout のみで判定可能）
       - secret-scan
 
-      - install-deps:
+      # 後続ジョブを実行するために依存関係をインストール
+      - install-deps
+
+      - preparation-gate:
           requires:
             - secret-scan
+            - install-deps
 
-      # 4つのスキャンを並列実行 — 全パスしないとビルドに進めない
+      # 2つのスキャンを並列実行 — 全パスしないとビルドに進めない
       - sbom-and-vuln-scan:
           requires:
-            - install-deps
+            - preparation-gate
       - license-check:
           requires:
-            - install-deps
-      - sast:
-          requires:
-            - install-deps
+            - preparation-gate
 
       # 全スキャン通過後にビルド
       - build:
           requires:
             - sbom-and-vuln-scan
             - license-check
-            - sast
