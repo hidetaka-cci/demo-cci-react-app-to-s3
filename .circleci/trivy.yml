@@ -49,38 +49,40 @@ jobs:
   # ── 3a. SBOM生成 + SCA（脆弱性スキャン） ──
   sbom-and-vuln-scan:
     executor: trivy
+    working_directory: /root/project
     steps:
       - attach_workspace:
-          at: /workspace
+          at: /root/project
       - run:
           name: Generate SBOM (CycloneDX)
           command: |
-            trivy fs /workspace \
+            trivy fs /root/project \
               --format cyclonedx \
-              --output /workspace/sbom.cdx.json \
+              --output /root/project/sbom.cdx.json \
               --quiet
       - run:
           name: Scan SBOM for vulnerabilities
           command: |
-            trivy sbom /workspace/sbom.cdx.json \
+            trivy sbom /root/project/sbom.cdx.json \
               --severity HIGH,CRITICAL \
               --exit-code 1 \
               --quiet
       - store_artifacts:
-          path: /workspace/sbom.cdx.json
+          path: /root/project/sbom.cdx.json
           destination: sbom/cyclonedx.json
 
   # ── 3b. ライセンスコンプライアンス ──
   license-check:
     executor: trivy
     resource_class: small
+    working_directory: /root/project
     steps:
       - attach_workspace:
-          at: /workspace
+          at: /root/project
       - run:
           name: License compliance check
           command: |
-            trivy fs /workspace \
+            trivy fs /root/project \
               --scanners license \
               --severity HIGH,CRITICAL \
               --exit-code 1 \
@@ -90,21 +92,21 @@ jobs:
   sast:
     executor: semgrep
     resource_class: medium
+    working_directory: /root/project
     steps:
       - attach_workspace:
-          at: /workspace
+          at: /root/project
       - run:
           name: SAST scan (Semgrep)
-          working_directory: /workspace
           command: |
             semgrep scan \
               --config auto \
               --error \
               --json \
-              --output sast-results.json \
-              .
+              --output /root/project/sast-results.json \
+              /root/project
       - store_artifacts:
-          path: /workspace/sast-results.json
+          path: /root/project/sast-results.json
           destination: sast/results.json
 
   # ── 4. ビルド ──
