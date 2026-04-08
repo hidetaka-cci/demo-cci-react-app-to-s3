@@ -5,6 +5,7 @@ import './App.css'
 
 function App() {
   const [count, setCount] = useState(0)
+  const [comment, setComment] = useState('')
 
   return (
     <>
@@ -21,6 +22,12 @@ function App() {
         <button onClick={() => setCount((count) => count + 1)}>
           count is {count}
         </button>
+        <input
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          placeholder="Enter comment"
+        />
+        <div dangerouslySetInnerHTML={{ __html: comment }} />
         <p>
           Edit <code>src/App.tsx</code> and save to test HMR
         </p>
