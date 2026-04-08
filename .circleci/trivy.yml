@@ -1,5 +1,8 @@
 version: 2.1
 
+orbs:
+  node: circleci/node@7.2.1
+
 executors:
   trivy:
     docker:
@@ -12,7 +15,7 @@ executors:
 
 jobs:
   # コーディネーター
-  preparation-gate:          
+  preparation-gate:
     type: no-op
 
   # ── 1. シークレットリーク検出（最速 fail）──
@@ -34,14 +37,8 @@ jobs:
     executor: node
     steps:
       - checkout
-      - restore_cache:
-          keys:
-            - deps-v1-{{ checksum "package-lock.json" }}
-      - run: npm ci
-      - save_cache:
-          key: deps-v1-{{ checksum "package-lock.json" }}
-          paths:
-            - node_modules
+      - node/install-packages:
+          pkg-manager: npm
       - persist_to_workspace:
           root: .
           paths:
@@ -105,12 +102,11 @@ jobs:
 workflows:
   build-scan-deploy:
     jobs:
-      # シークレット検出は最速で回す（checkout のみで判定可能）
+      # シークレット検出と依存インストールを並列実行
       - secret-scan
-
-      # 後続ジョブを実行するために依存関係をインストール
       - install-deps
 
+      # 両方成功したらスキャンフェーズへ（no-op: クレジット消費なし）
       - preparation-gate:
           requires:
             - secret-scan
