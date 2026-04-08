@@ -94,6 +94,18 @@ jobs:
     resource_class: medium
     working_directory: /root/project
     steps:
+      #- checkout
+      - run:
+          name: Debug environment
+          command: |
+            whoami
+            id
+            tar --version
+            ls -la /root/ || echo "/root not accessible"
+            mkdir -p /root/project && echo "mkdir OK" || echo "mkdir FAILED"
+      - run:
+          name: Install GNU tar (fix BusyBox tar issue)
+          command: apk add --no-cache tar gzip
       - attach_workspace:
           at: /root/project
       - run:
