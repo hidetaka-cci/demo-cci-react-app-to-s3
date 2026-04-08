@@ -7,11 +7,6 @@ function App() {
   const [count, setCount] = useState(0)
   const [comment, setComment] = useState('')
 
-  // Semgrep が検出するパターン: eval の直接使用
-  const runUserCode = (code: string) => {
-    return eval(code)
-  }
-
   return (
     <>
       <div>
@@ -32,7 +27,6 @@ function App() {
           onChange={(e) => setComment(e.target.value)}
           placeholder="Enter comment"
         />
-        <div dangerouslySetInnerHTML={{ __html: comment }} />
         <p>
           Edit <code>src/App.tsx</code> and save to test HMR
         </p>
